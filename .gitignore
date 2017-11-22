@@ -1,0 +1,4 @@
+__pycache__
+passwords.egg-info/
+.passwords
+*.pyc
