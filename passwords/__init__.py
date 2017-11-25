@@ -1,57 +1,11 @@
 import os
 
-from prompt_toolkit import prompt
-
 from . import db
 from . import crypto
 from . import ui
 
 
-class Passwords(object):
-
-    def __init__(self):
-        self.repo = Repository.at(os.getcwd())
-
-    @classmethod
-    def init(cls):
-        Repository.create(os.getcwd())
-
-    def save(self, path):
-        exists = PasswordModel.query.get(path)
-        if exists:
-            raise Exception('Path {} already present in repository'.format(path))
-        plaintext = prompt('enter secret: ', is_password=True)
-        ciphertext = self.repo.public_key.encrypt(plaintext)
-        record = PasswordModel.save(path, ciphertext)
-        return record
-
-    def show(self, path):
-        records = PasswordModel.query.filter(PasswordModel.path.ilike('{}%'.format(path))).all()
-        self.repo.private_key.unseal()
-        tree = ui.Node()
-        for record in records:
-            tree.add_value_by_path(record.path, self.repo.private_key.decrypt(record.value))
-        return tree.str()
-
-
-class PasswordModel(db.Model):
-
-    __table__ = db.Table(
-        'registry', db.Metadata,
-        db.Column('path',  db.Unicode, primary_key=True),
-        db.Column('value', db.Unicode))
-
-    @classmethod
-    def save(cls, path, ciphertext):
-        record = cls(
-            path=path,
-            value=ciphertext)
-        cls.Session.add(record)
-        cls.Session.commit()
-        return record
-
-
-class Repository(object):
+class PasswordRepository(object):
 
     FILESYSTEM_NAME  = '.passwords'
     PRIVATE_KEY_NAME = 'master.pem'
@@ -65,7 +19,7 @@ class Repository(object):
         self.private_key = None
 
     @classmethod
-    def at(cls, directory):
+    def load(cls, directory):
         repo = cls()
         repo.directory   = os.path.join(directory, repo.FILESYSTEM_NAME)
         if not os.path.exists(repo.directory):
@@ -76,7 +30,7 @@ class Repository(object):
         return repo
 
     @classmethod
-    def create(cls, filesystem_path):
+    def new(cls, filesystem_path):
         repository_path = os.path.join(filesystem_path, cls.FILESYSTEM_NAME)
         if os.path.exists(repository_path):
             raise Exception('Repository already exists at {}'.format(repository_path))
@@ -88,3 +42,47 @@ class Repository(object):
         repo.database    = db.init(os.path.join(repo.directory, repo.DATABASE_NAME))
         db.Metadata.create_all(db.Model.Session.bind)
         return repo
+
+    def save(self, path, value):
+        exists = db.PasswordModel.query.get(path)
+        if exists:
+            raise Exception('Path {} already present in repository'.format(path))
+        ciphertext = self.public_key.encrypt(value)
+        record = db.PasswordModel.save(path, ciphertext)
+        return record
+
+    def show(self, path):
+        records = db.PasswordModel.query.filter(db.PasswordModel.path.ilike('{}%'.format(path))).all()
+        self.private_key.unseal()
+        tree = ui.Node()
+        for record in records:
+            tree.add_value_by_path(record.path, self.private_key.decrypt(record.value))
+        return tree.str()
+
+    def list(self, path):
+        records = db.PasswordModel.query.filter(db.PasswordModel.path.ilike('{}%'.format(path))).all()
+        tree = ui.Node()
+        if records:
+            for record in records:
+                tree.add_value_by_path(record.path, '*****')
+            return tree.str()
+        return ''
+
+    def get(self, path):
+        record = db.PasswordModel.query.get(path)
+        if not record:
+            raise Exception("Path {} doesn't exist in repository".format(path))
+        self.private_key.unseal()
+        return self.private_key.decrypt(record.value)
+
+    def drop(self, path):
+        record = db.PasswordModel.query.get(path)
+        if not record:
+            raise Exception("Path {} doesn't exist in repository".format(path))
+        record.delete()
+
+    def importPasswords(self, data):
+        pass
+
+    def exportPasswords(self, public_key_material):
+        pass

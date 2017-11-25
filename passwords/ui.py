@@ -48,7 +48,7 @@ class Printer(object):
         lines = [
             str(colorful.bold_cyan(x[0])) +
             (' ' * (tree_width - len(x[0]))) +
-            str(colorful.orange(' = ')) +
+            str(colorful.bold_yellow(' = ')) +
             x[1]
             for x in key_values
         ]

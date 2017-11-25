@@ -1,5 +1,6 @@
 import codecs
 from enum import Enum, auto
+from getpass import getpass
 import os
 import subprocess
 
@@ -7,16 +8,15 @@ from Crypto import Random as _Random
 from Crypto.Cipher import AES, PKCS1_OAEP
 from Crypto.PublicKey import RSA
 import msgpack
-from prompt_toolkit import prompt
 
 
 class PublicKey(object):
 
     def __init__(self):
-        self.path = None
+        self.path     = None
         self.pem_data = None
-        self.rsa_key = None
-        self.cipher = None
+        self.rsa_key  = None
+        self.cipher   = None
 
     def encrypt(self, plaintext):
         key, nonce, ciphertext = AESCipher.encrypt(plaintext)
@@ -40,26 +40,26 @@ class PrivateKey(object):
         UNSEALED = auto()
 
     def __init__(self):
-        self.path = None
-        self.state = self.State.SEALED
+        self.path     = None
+        self.state    = self.State.SEALED
         self.pem_data = None
-        self.rsa_key = None
-        self.cipher = None
+        self.rsa_key  = None
+        self.cipher   = None
 
     def decrypt(self, binary_message):
         if self.state == self.State.SEALED:
             raise Exception('Private key is sealed and cannot perform decryption')
-        envelope = Envelope.parse(binary_message)
-        aes_key = self.cipher.decrypt(envelope.encrypted_key)
+        envelope  = Envelope.parse(binary_message)
+        aes_key   = self.cipher.decrypt(envelope.encrypted_key)
         plaintext = AESCipher.decrypt(aes_key, envelope.nonce, envelope.ciphertext)
         return plaintext
 
     def unseal(self):
-        display = 'passphrase for ' + self.path + ': '
-        passphrase = prompt(display, is_password=True)
+        display = 'master passphrase: '
+        passphrase   = getpass(display)
         self.rsa_key = RSA.importKey(self.pem_data, passphrase)
-        self.cipher = PKCS1_OAEP.new(self.rsa_key)
-        self.state = self.State.UNSEALED
+        self.cipher  = PKCS1_OAEP.new(self.rsa_key)
+        self.state   = self.State.UNSEALED
         return self
 
     @classmethod
@@ -85,10 +85,10 @@ class AESCipher:
 
     @classmethod
     def encrypt(cls, plaintext):
-        raw = cls.pad(plaintext)
-        key = cls.random_bytes(32)
-        nonce = cls.random_bytes(16)
-        cipher = AES.new(key, AES.MODE_CBC, nonce)
+        raw        = cls.pad(plaintext)
+        key        = cls.random_bytes(32)
+        nonce      = cls.random_bytes(16)
+        cipher     = AES.new(key, AES.MODE_CBC, nonce)
         ciphertext = cipher.encrypt(raw)
         return key, nonce, ciphertext
 
@@ -124,14 +124,14 @@ class Envelope(object):
     def of(cls, encrypted_key, nonce, ciphertext):
         envelope = cls()
         envelope.encrypted_key = encrypted_key
-        envelope.nonce = nonce
-        envelope.ciphertext = ciphertext
+        envelope.nonce         = nonce
+        envelope.ciphertext    = ciphertext
         return envelope
 
     def serialize(self):
-        msg = (self.encrypted_key, self.nonce, self.ciphertext)
+        msg    = (self.encrypted_key, self.nonce, self.ciphertext)
         binary = msgpack.packb(msg)
-        b64 = codecs.encode(binary, 'base64')
+        b64    = codecs.encode(binary, 'base64')
         return b64.decode('utf-8')
 
     @classmethod
